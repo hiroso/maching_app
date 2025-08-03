@@ -1,6 +1,8 @@
 # マッチングアプリ (Matching App)
 
 Flutter製のモダンなマッチングアプリケーションです。TinderライクなUIとスワイプ機能を持つ、クロスプラットフォーム対応のアプリです。
+ // Start Generation Here
+![マッチング](maching.gif)
 
 ## 🚀 機能一覧
 
