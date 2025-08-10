@@ -1,21 +1,14 @@
 # Uncomment this line to define a global platform for your project
-# platform :ios, '12.0'
+platform :ios, '13.0'
 
-# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-
-project 'Runner', {
-  'Debug' => :debug,
-  'Profile' => :release,
-  'Release' => :release,
-}
+ENV['COCOAPODS_PARALLEL_CODE_SIGN'] = 'true'
 
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
   unless File.exist?(generated_xcode_build_settings_path)
     raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
   end
-
   File.foreach(generated_xcode_build_settings_path) do |line|
     matches = line.match(/FLUTTER_ROOT\=(.*)/)
     return matches[1].strip if matches
@@ -27,10 +20,11 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 
 flutter_ios_podfile_setup
 
-target 'Runner' do
-  use_frameworks!
+use_modular_headers!
 
+target 'Runner' do
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
   target 'RunnerTests' do
     inherit! :search_paths
   end
@@ -39,5 +33,38 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    
+    # すべてのターゲットで-Gフラグ除去
+    target.build_configurations.each do |config|
+      # BoringSSL-GRPC専用設定
+      if target.name == 'BoringSSL-GRPC'
+        config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'NO'
+      end
+      
+      # -Gフラグ除去（すべてのビルド設定から）
+      %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS OTHER_SWIFT_FLAGS OTHER_LDFLAGS COMPILER_FLAGS].each do |key|
+        if config.build_settings[key]
+          if config.build_settings[key].is_a?(String)
+            config.build_settings[key] = config.build_settings[key].gsub(/-G\d*/, '')
+          elsif config.build_settings[key].is_a?(Array)
+            config.build_settings[key] = config.build_settings[key].reject { |f| f.to_s.start_with?('-G') }
+          end
+        end
+      end
+      
+      # Debugビルドの最適化
+      if config.name == 'Debug'
+        config.build_settings['ONLY_ACTIVE_ARCH'] = 'YES'
+      end
+    end
+  end
+  
+  # gRPC-Coreのモジュールマップパス修正
+  grpc_modulemap_src = 'Pods/Target Support Files/gRPC-Core/gRPC-Core.modulemap'
+  grpc_modulemap_dst = 'Pods/Headers/Private/grpc/gRPC-Core.modulemap'
+  
+  if File.exist?(grpc_modulemap_src) && !File.exist?(grpc_modulemap_dst)
+    FileUtils.mkdir_p('Pods/Headers/Private/grpc')
+    FileUtils.cp(grpc_modulemap_src, grpc_modulemap_dst)
   end
 end

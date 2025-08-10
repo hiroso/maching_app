@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:matching_app/providers/auth_provider.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _locationEnabled = true;
   double _maxDistance = 50.0;
@@ -65,7 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSection('年齢設定', [
             _buildRangeSliderTile(
               title: '年齢範囲',
-              subtitle: '${_minAge}歳 - ${_maxAge}歳',
+              subtitle: '$_minAge歳 - $_maxAge歳',
               minValue: _minAge.toDouble(),
               maxValue: _maxAge.toDouble(),
               onChanged: (values) {
@@ -282,8 +284,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('キャンセル'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
+              try {
+                await ref.read(authServiceProvider).signOut();
+              } catch (e) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('ログアウトに失敗しました: $e')));
+                return;
+              }
               ScaffoldMessenger.of(
                 context,
               ).showSnackBar(const SnackBar(content: Text('ログアウトしました')));
