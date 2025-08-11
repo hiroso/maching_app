@@ -43,3 +43,61 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase Configuration Files (機密情報)
+**/GoogleService-Info.plist
+**/google-services.json
+**/firebase_options.dart
+**/firebase.json
+
+# Environment Variables (環境変数)
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+
+# iOS Configuration (機密情報)
+**/ios/Runner/GoogleService-Info.plist
+**/macos/Runner/GoogleService-Info.plist
+**/ios/Runner/Info.plist
+**/macos/Runner/Info.plist
+
+# Android Configuration (機密情報)
+**/android/app/google-services.json
+**/android/app/src/main/res/values/strings.xml
+
+# Flutter Generated Files
+**/ios/Flutter/GeneratedPluginRegistrant.swift
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Build Outputs
+**/build/
+**/ios/build/
+**/android/build/
+**/macos/build/
+
+# CocoaPods
+**/ios/Pods/
+**/ios/Podfile.lock
+**/macos/Pods/
+**/macos/Podfile.lock
+
+# Xcode
+**/ios/Runner.xcworkspace/xcshareddata/
+**/macos/Runner.xcworkspace/xcshareddata/
+**/*.xcconfig
+**/*.xcworkspace
+**/*.xcodeproj/project.xcworkspace/
+**/*.xcodeproj/xcuserdata/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

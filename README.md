@@ -84,6 +84,27 @@ Flutter製のモダンなマッチングアプリケーションです。Tinder�
 - iOS開発: Xcode 16.2以上
 - Android開発: Android Studio
 
+### 🔐 セキュリティ設定（重要）
+
+このプロジェクトでは機密情報（Firebase API Keys、Google Sign-In設定など）を安全に管理しています。
+
+#### 初回セットアップ（必須）
+1. **Firebase Console** でプロジェクトを作成
+2. **iOS/Android/Webアプリ** を登録
+3. 設定ファイルをダウンロード：
+   - `ios/Runner/GoogleService-Info.plist`
+   - `android/app/google-services.json`
+   - `lib/firebase_options.dart`
+
+#### 機密情報の管理
+```bash
+# 設定テンプレートをコピー
+cp config/app_config.example.dart config/app_config.dart
+
+# 実際の値を設定ファイルに記入
+# このファイルは .gitignore に含まれているため、Gitにコミットされません
+```
+
 ### セットアップ
 1. リポジトリをクローン
 ```bash
@@ -91,12 +112,17 @@ git clone https://github.com/hiroso/maching_app.git
 cd maching_app
 ```
 
-2. 依存関係をインストール
+2. **機密情報ファイルを配置**（上記の「初回セットアップ」を参照）
+
+3. 依存関係をインストール
 ```bash
 flutter pub get
+
+# iOSの場合
+cd ios && pod install && cd ..
 ```
 
-3. 実行
+4. 実行
 ```bash
 # Web版
 flutter run -d chrome
@@ -136,6 +162,18 @@ lib/
 └── utils/                 # ユーティリティ
 ```
 
+## 🔐 セキュリティ・ベストプラクティス
+
+### 機密情報の管理
+- **Firebase設定ファイル** は `.gitignore` に含まれており、Gitにコミットされません
+- **API Keys** や **Client IDs** は環境変数または設定ファイルで管理
+- **本番環境** では必ず環境変数を使用
+
+### 開発環境での注意点
+- `GoogleService-Info.plist` や `google-services.json` を直接編集しない
+- 設定変更時は `config/app_config.dart` を更新
+- 機密情報を含むファイルをGitにコミットしない
+
 ## 🔧 開発・カスタマイズ
 
 ### 新機能の追加
@@ -146,6 +184,10 @@ lib/
 ### スタイリングのカスタマイズ
 - `main.dart` の `ThemeData` を修正
 - 各画面での `Colors` や `TextStyle` を変更
+
+### 設定の変更
+- Firebase設定を変更する場合は `config/app_config.dart` を編集
+- 機密情報は環境変数または設定ファイルで管理
 
 ## 📝 今後の拡張予定
 
@@ -161,6 +203,34 @@ lib/
 
 - 外部画像サービス（picsum.photos）の接続エラー
 - iOS実機でのUSB接続切断時のクラッシュ（開発者証明書関連）
+
+## 🔧 トラブルシューティング
+
+### よくある問題と解決方法
+
+#### Firebase関連のエラー
+```bash
+# 機密情報ファイルが見つからない場合
+flutter clean
+flutter pub get
+# 機密情報ファイルを正しい場所に配置してから再実行
+```
+
+#### iOSビルドエラー
+```bash
+# Podfile関連のエラー
+cd ios
+pod deintegrate
+pod install
+cd ..
+flutter clean
+flutter pub get
+```
+
+#### 機密情報の管理
+- API Keyが無効な場合：Firebase Consoleで正しいキーを確認
+- Google Sign-Inが動作しない場合：`Info.plist` の設定を確認
+- 設定ファイルが見つからない場合：`.gitignore` の設定を確認
 
 ## 📄 ライセンス
 
