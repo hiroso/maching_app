@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
@@ -167,22 +169,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       }
 
       final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final userDoc = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid);
-        await userDoc.set({
-          'uid': user.uid,
-          'email': user.email,
-          'displayName': user.displayName,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'provider': 'google',
-        }, SetOptions(merge: true));
-      }
-
       print('Google認証成功: ${user?.email ?? 'email不明'}');
+      
+      // 認証成功後、すぐに遷移を試行
+      print('認証成功、オンボーディング画面に遷移します');
       _navigateToMain();
+      
+      // バックグラウンドでFirestoreに保存（オプション）
+      _saveGoogleUserDataToFirestore(user);
     } catch (e) {
       print('Google認証エラー: $e');
       if (mounted) {
@@ -250,7 +244,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _navigateToMain();
     } catch (e) {
       print('Apple認証エラー: $e');
-      if (mounted) {
+      if (mounted && context.mounted) {
         _showErrorDialog('Appleサインインに失敗しました: $e');
       }
     } finally {
@@ -297,12 +291,56 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
 
     try {
-      await FirebaseAuth.instance.signInAnonymously();
-      print('ゲストログイン成功');
+      // 既存のゲストユーザーIDをチェック
+      final prefs = await SharedPreferences.getInstance();
+      final existingUserId = prefs.getString('guest_user_id');
+      
+      User? user;
+      
+      if (existingUserId != null) {
+        // 既存のユーザーIDがある場合は、そのユーザーでサインインを試行
+        try {
+          print('既存のゲストユーザーIDを確認: $existingUserId');
+          // 既存のユーザーセッションを復元（Firebase Authは自動的に管理）
+          user = FirebaseAuth.instance.currentUser;
+          if (user == null || user.uid != existingUserId) {
+            // セッションが切れている場合は新しく作成
+            final userCredential = await FirebaseAuth.instance.signInAnonymously();
+            user = userCredential.user;
+            print('新しいゲストユーザーを作成: ${user?.uid}');
+          } else {
+            print('既存のゲストユーザーセッションを使用: ${user.uid}');
+          }
+        } catch (e) {
+          print('既存ユーザーでのサインインに失敗、新しく作成: $e');
+          final userCredential = await FirebaseAuth.instance.signInAnonymously();
+          user = userCredential.user;
+        }
+      } else {
+        // 初回の場合は新しく作成
+        final userCredential = await FirebaseAuth.instance.signInAnonymously();
+        user = userCredential.user;
+        print('初回ゲストユーザーを作成: ${user?.uid}');
+      }
+      
+      // ユーザーIDをローカルに保存
+      if (user != null) {
+        await prefs.setString('guest_user_id', user.uid);
+        print('ゲストユーザーIDを保存: ${user.uid}');
+      }
+      
+      print('ゲストログイン成功: ${user?.uid}');
+      
+      // 認証成功後、すぐに遷移を試行
+      print('認証成功、オンボーディング画面に遷移します');
       _navigateToMain();
+      
+      // バックグラウンドでFirestoreに保存（オプション）
+      _saveUserDataToFirestore(user);
+      
     } catch (e) {
       print('ゲストログインエラー: $e');
-      if (mounted) {
+      if (mounted && context.mounted) {
         _showErrorDialog('ゲストログインに失敗しました: $e');
       }
     } finally {
@@ -314,25 +352,88 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  // バックグラウンドでユーザーデータを保存
+  Future<void> _saveUserDataToFirestore(User? user) async {
+    if (user == null) return;
+    
+    try {
+      final userDoc = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid);
+      await userDoc.set({
+        'uid': user.uid,
+        'displayName': 'ゲストユーザー',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'provider': 'anonymous',
+        'isGuest': true,
+      }, SetOptions(merge: true));
+      print('ゲストユーザー情報をFirestoreに保存完了');
+    } catch (firestoreError) {
+      print('Firestore保存エラー（無視）: $firestoreError');
+    }
+  }
+
+  // バックグラウンドでGoogleユーザーデータを保存
+  Future<void> _saveGoogleUserDataToFirestore(User? user) async {
+    if (user == null) return;
+    
+    try {
+      final userDoc = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid);
+      await userDoc.set({
+        'uid': user.uid,
+        'email': user.email,
+        'displayName': user.displayName,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'provider': 'google',
+      }, SetOptions(merge: true));
+      print('Googleユーザー情報をFirestoreに保存完了');
+    } catch (firestoreError) {
+      print('Firestore保存エラー（無視）: $firestoreError');
+    }
+  }
+
   void _navigateToMain() {
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/');
+    print('_navigateToMain() が呼び出されました');
+    
+    // 認証成功後、メイン画面に遷移（オンボーディングはmain.dartで制御）
+    try {
+      print('メイン画面に遷移します...');
+      Navigator.pushNamedAndRemoveUntil(
+        context, 
+        '/', 
+        (route) => false
+      );
+      print('Navigator.pushNamedAndRemoveUntil が実行されました');
+    } catch (e) {
+      print('遷移エラー: $e');
+      // エラーが発生した場合は、GoRouterを使用
+      try {
+        print('GoRouterを使用して遷移を試行...');
+        context.go('/');
+        print('GoRouter.go が実行されました');
+      } catch (goError) {
+        print('GoRouter遷移エラー: $goError');
+      }
     }
   }
 
   void _showErrorDialog(String message) {
     // Navigatorコンテキストの問題を回避
-    if (mounted) {
+    if (mounted && context.mounted) {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
+        builder: (dialogContext) => AlertDialog(
           title: const Text('エラー'),
           content: Text(message),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.of(dialogContext).pop();
               },
               child: const Text('OK'),
             ),

@@ -54,13 +54,21 @@
 			<string>google</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				        <string>com.googleusercontent.apps.YOUR_REVERSED_CLIENT_ID</string>
+				<string>$(GOOGLE_CLIENT_ID_REVERSED)</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>apple</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>signinwithapple-$(CFBundleIdentifier)</string>
 			</array>
 		</dict>
 	</array>
 	
 	<!-- Google Sign-In 設定 -->
 	<key>GIDClientID</key>
-	        <string>YOUR_CLIENT_ID</string>
+	<string>$(GOOGLE_CLIENT_ID)</string>
 </dict>
 </plist>

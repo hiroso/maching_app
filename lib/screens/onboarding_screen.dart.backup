@@ -1,0 +1,979 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../models/user_profile.dart';
+
+class OnboardingScreen extends ConsumerStatefulWidget {
+  const OnboardingScreen({super.key});
+
+  @override
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+  
+  // 基本情報
+  Gender? _selectedGender;
+  int? _selectedBirthYear;
+  int? _selectedBirthMonth;
+  int? _selectedBirthDay;
+  String _nickname = '';
+  String? _selectedLocation;
+  
+  // 追加情報（オプション）
+  String _bio = '';
+  String _occupation = '';
+  List<String> _interests = [];
+  
+  bool _isLoading = false;
+
+  // 都道府県リスト
+  static const List<String> _prefectures = [
+    '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+    '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+    '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
+    '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
+    '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+    '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
+    '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
+  ];
+
+  // 生年月日のリスト
+  static List<int> get _birthYears {
+    final currentYear = DateTime.now().year;
+    return List.generate(63, (index) => currentYear - 18 - index); // 18歳以上
+  }
+  
+  static const List<int> _birthMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]; // 1-12月
+  static const List<int> _birthDays = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]; // 1-31日
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.pink, Colors.purple],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // ヘッダー
+              _buildHeader(),
+              
+              // プログレスバー
+              _buildProgressBar(),
+              
+              // メインコンテンツ
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentPage = index;
+                    });
+                  },
+                  children: [
+                    _buildBasicInfoPage(),
+                    _buildAdditionalInfoPage(),
+                    _buildCompletionPage(),
+                  ],
+                ),
+              ),
+              
+              // ナビゲーションボタン
+              _buildNavigationButtons(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+          ),
+          const Expanded(
+            child: Text(
+              'プロフィール設定',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(width: 48), // バランス調整
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: LinearProgressIndicator(
+        value: (_currentPage + 1) / 3,
+        backgroundColor: Colors.white24,
+        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildBasicInfoPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '基本情報を設定しましょう',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'マッチングに必要な最小限の情報です',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white70,
+            ),
+          ),
+          const SizedBox(height: 40),
+          
+          // 性別選択
+          _buildSectionTitle('性別 *'),
+          const SizedBox(height: 16),
+          Row(
+            children: Gender.values.map((gender) {
+              final isSelected = _selectedGender == gender;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedGender = gender;
+                    });
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white : Colors.white24,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? Colors.white : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    child: Text(
+                      gender == Gender.male ? '男性' : 
+                      gender == Gender.female ? '女性' : 'その他',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: isSelected ? Colors.purple : Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 32),
+          
+          // 生年月日選択
+          _buildSectionTitle('生年月日 *'),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white30),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _selectedBirthYear != null && _selectedBirthMonth != null && _selectedBirthDay != null
+                      ? '選択中: ${_selectedBirthYear}年${_selectedBirthMonth}月${_selectedBirthDay}日'
+                      : '生年月日を選択してください',
+                  style: TextStyle(
+                    color: _selectedBirthYear != null && _selectedBirthMonth != null && _selectedBirthDay != null
+                        ? Colors.white
+                        : Colors.white70,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // 生年月日選択（標準的なDatePicker）
+                _buildSectionTitle('生年月日 *'),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white30),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedBirthYear != null && _selectedBirthMonth != null && _selectedBirthDay != null
+                            ? '選択中: ${_selectedBirthYear}年${_selectedBirthMonth}月${_selectedBirthDay}日'
+                            : '生年月日を選択してください',
+                        style: TextStyle(
+                          color: _selectedBirthYear != null && _selectedBirthMonth != null && _selectedBirthDay != null
+                              ? Colors.white
+                              : Colors.white70,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      GestureDetector(
+                        onTap: () => _showBirthDatePicker(context),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white30),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '生年月日を選択',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const Icon(Icons.calendar_today, color: Colors.white, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          
+          // ニックネーム
+          _buildSectionTitle('ニックネーム *'),
+          const SizedBox(height: 16),
+          TextField(
+            onChanged: (value) {
+              setState(() {
+                _nickname = value;
+              });
+            },
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+            decoration: InputDecoration(
+              hintText: 'ニックネームを入力',
+              hintStyle: const TextStyle(color: Colors.white70),
+              filled: true,
+              fillColor: Colors.white24,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(16),
+            ),
+          ),
+          const SizedBox(height: 32),
+          
+          // 居住地
+          _buildSectionTitle('居住地（推奨）'),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white30),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _selectedLocation != null ? '選択中: $_selectedLocation' : '都道府県を選択してください',
+                  style: TextStyle(
+                    color: _selectedLocation != null ? Colors.white : Colors.white70,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 200,
+                  child: GridView.builder(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      childAspectRatio: 2.5,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                    ),
+                    itemCount: _prefectures.length,
+                    itemBuilder: (context, index) {
+                      final prefecture = _prefectures[index];
+                      final isSelected = _selectedLocation == prefecture;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedLocation = prefecture;
+                          });
+                          print('居住地が選択されました: $prefecture');
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.white : Colors.white24,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isSelected ? Colors.white : Colors.white30,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              prefecture,
+                              style: TextStyle(
+                                color: isSelected ? Colors.purple : Colors.white,
+                                fontSize: 12,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdditionalInfoPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '追加情報を設定しましょう',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'より良いマッチングのために、追加情報を入力してください（オプション）',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white70,
+            ),
+          ),
+          const SizedBox(height: 40),
+          
+          // 自己紹介
+          _buildSectionTitle('自己紹介'),
+          const SizedBox(height: 16),
+          TextField(
+            onChanged: (value) {
+              setState(() {
+                _bio = value;
+              });
+            },
+            maxLines: 4,
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+            decoration: InputDecoration(
+              hintText: '自己紹介を入力してください',
+              hintStyle: const TextStyle(color: Colors.white70),
+              filled: true,
+              fillColor: Colors.white24,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(16),
+            ),
+          ),
+          const SizedBox(height: 32),
+          
+          // 職業
+          _buildSectionTitle('職業'),
+          const SizedBox(height: 16),
+          TextField(
+            onChanged: (value) {
+              setState(() {
+                _occupation = value;
+              });
+            },
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+            decoration: InputDecoration(
+              hintText: '職業を入力してください',
+              hintStyle: const TextStyle(color: Colors.white70),
+              filled: true,
+              fillColor: Colors.white24,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompletionPage() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.check_circle_outline,
+            size: 80,
+            color: Colors.white,
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'プロフィール設定完了！',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'これでマッチングを開始できます。\n後からプロフィールを更新することも可能です。',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white70,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+          
+                     // プロフィール完成度
+           Container(
+             padding: const EdgeInsets.all(20),
+             decoration: BoxDecoration(
+               color: Colors.white24,
+               borderRadius: BorderRadius.circular(16),
+             ),
+             child: Column(
+               children: [
+                 const Text(
+                   'プロフィール完成度',
+                   style: TextStyle(
+                     fontSize: 18,
+                     fontWeight: FontWeight.bold,
+                     color: Colors.white,
+                   ),
+                 ),
+                 const SizedBox(height: 16),
+                 LinearProgressIndicator(
+                   value: _calculateCompletionScore() / 100,
+                   backgroundColor: Colors.white24,
+                   valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                 ),
+                 const SizedBox(height: 8),
+                 Text(
+                   '${_calculateCompletionScore()}%',
+                   style: const TextStyle(
+                     fontSize: 16,
+                     color: Colors.white,
+                     fontWeight: FontWeight.bold,
+                   ),
+                 ),
+                 const SizedBox(height: 16),
+                 // 選択された情報の表示
+                 if (_selectedBirthYear != null && _selectedBirthMonth != null && _selectedBirthDay != null)
+                   Text(
+                     '年齢: ${_calculateAge()}歳',
+                     style: const TextStyle(
+                       fontSize: 14,
+                       color: Colors.white70,
+                     ),
+                   ),
+               ],
+             ),
+           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildNavigationButtons() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Row(
+        children: [
+          // 戻るボタン
+          if (_currentPage > 0)
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () {
+                  _pageController.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: const BorderSide(color: Colors.white),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  '戻る',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ),
+            ),
+          
+          if (_currentPage > 0) const SizedBox(width: 16),
+          
+          // 次へ/完了ボタン
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _canProceed() ? _handleNextOrComplete : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.purple,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                _currentPage == 2 ? '完了' : '次へ',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _canProceed() {
+    switch (_currentPage) {
+      case 0:
+        return _selectedGender != null && 
+               _selectedBirthYear != null && 
+               _selectedBirthMonth != null && 
+               _selectedBirthDay != null && 
+               _nickname.isNotEmpty;
+      case 1:
+        return true; // 追加情報はオプション
+      case 2:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  void _handleNextOrComplete() {
+    if (_currentPage < 2) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _saveProfile();
+    }
+  }
+
+  int _calculateCompletionScore() {
+    int score = 0;
+    if (_selectedGender != null) score += 17;
+    if (_selectedBirthYear != null && _selectedBirthMonth != null && _selectedBirthDay != null) score += 17;
+    if (_nickname.isNotEmpty) score += 17;
+    if (_selectedLocation != null && _selectedLocation!.isNotEmpty) score += 17;
+    if (_bio.isNotEmpty) score += 16;
+    if (_occupation.isNotEmpty) score += 16;
+    return score;
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('ユーザーが認証されていません');
+      }
+
+             // プロフィールデータを作成
+       final profileData = {
+         'uid': user.uid,
+         'email': user.email,
+         'displayName': user.displayName,
+         'nickname': _nickname,
+         'gender': _selectedGender?.name,
+         'birthYear': _selectedBirthYear,
+         'birthMonth': _selectedBirthMonth,
+         'birthDay': _selectedBirthDay,
+         'age': _calculateAge(),
+         'location': _selectedLocation,
+         'bio': _bio,
+         'occupation': _occupation,
+         'photos': <String>[],
+         'interests': <String>[],
+         'provider': user.isAnonymous ? 'anonymous' : 'google',
+         'isGuest': user.isAnonymous,
+         'completionLevel': _calculateCompletionLevel(),
+         'createdAt': FieldValue.serverTimestamp(),
+         'updatedAt': FieldValue.serverTimestamp(),
+       };
+
+      // Firestoreに保存
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(profileData, SetOptions(merge: true));
+
+      print('プロフィール保存完了');
+      
+      // メイン画面に遷移
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/');
+      }
+    } catch (e) {
+      print('プロフィール保存エラー: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('プロフィールの保存に失敗しました: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _calculateCompletionLevel() {
+    final score = _calculateCompletionScore();
+    if (score <= 50) return 'basic';
+    if (score <= 80) return 'intermediate';
+    return 'complete';
+  }
+
+  // 有効な日数を取得（うるう年と月の日数を考慮）
+  List<int> _getValidDays() {
+    if (_selectedBirthYear == null || _selectedBirthMonth == null) {
+      return _birthDays;
+    }
+    
+    final year = _selectedBirthYear!;
+    final month = _selectedBirthMonth!;
+    
+    // 各月の日数
+    final daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    
+    // うるう年の判定
+    bool isLeapYear = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    
+    // 2月の場合はうるう年を考慮
+    if (month == 2 && isLeapYear) {
+      return List.generate(29, (index) => index + 1);
+    }
+    
+    return List.generate(daysInMonth[month - 1], (index) => index + 1);
+  }
+
+  // 年と月に基づいて有効な日数を取得（ダイアログ用）
+  List<int> _getValidDaysForYearMonth(int year, int month) {
+    // 各月の日数
+    final daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    
+    // うるう年の判定
+    bool isLeapYear = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    
+    // 2月の場合はうるう年を考慮
+    if (month == 2 && isLeapYear) {
+      return List.generate(29, (index) => index + 1);
+    }
+    
+    return List.generate(daysInMonth[month - 1], (index) => index + 1);
+  }
+
+  // 年齢を計算
+  int? _calculateAge() {
+    if (_selectedBirthYear == null || _selectedBirthMonth == null || _selectedBirthDay == null) {
+      return null;
+    }
+    
+    final now = DateTime.now();
+    final birthDate = DateTime(_selectedBirthYear!, _selectedBirthMonth!, _selectedBirthDay!);
+    
+    int age = now.year - birthDate.year;
+    
+    // 今年の誕生日がまだ来ていない場合は1歳引く
+    if (now.month < birthDate.month || (now.month == birthDate.month && now.day < birthDate.day)) {
+      age--;
+    }
+    
+    return age;
+  }
+
+
+
+    // 生年月日選択ピッカー（Qiita記事を参考にした実装）
+  Future<void> _showBirthDatePicker(BuildContext context) async {
+    // 現在の日付を取得
+    final now = DateTime.now();
+    
+    // 初期日付を設定（18歳）
+    final initialDate = DateTime(now.year - 18, now.month, now.day);
+    
+    // 最小日付（1950年1月1日）
+    final firstDate = DateTime(1950, 1, 1);
+    
+    // 最大日付（現在の日付）
+    final lastDate = DateTime(now.year, now.month, now.day);
+    
+    try {
+            final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: initialDate,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        locale: const Locale('ja', 'JP'), // 日本語ロケール
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+            return AlertDialog(
+              backgroundColor: Colors.purple.shade800,
+              title: const Text(
+                '生年月日を選択',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 年選択
+                    Row(
+                      children: [
+                        const Text('年: ', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        Expanded(
+                          child: DropdownButton<int>(
+                            value: tempYear,
+                            dropdownColor: Colors.purple.shade700,
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                            items: _birthYears.map((year) {
+                              return DropdownMenuItem<int>(
+                                value: year,
+                                child: Text('$year年'),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(() {
+                                  tempYear = value;
+                                  tempDay = 1; // 年が変更されたら日付をリセット
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // 月選択
+                    Row(
+                      children: [
+                        const Text('月: ', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        Expanded(
+                          child: DropdownButton<int>(
+                            value: tempMonth,
+                            dropdownColor: Colors.purple.shade700,
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                            items: _birthMonths.map((month) {
+                              return DropdownMenuItem<int>(
+                                value: month,
+                                child: Text('$month月'),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(() {
+                                  tempMonth = value;
+                                  tempDay = 1; // 月が変更されたら日付をリセット
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // 日選択
+                    Row(
+                      children: [
+                        const Text('日: ', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        Expanded(
+                          child: DropdownButton<int>(
+                            value: tempDay,
+                            dropdownColor: Colors.purple.shade700,
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                            items: _getValidDaysForYearMonth(tempYear, tempMonth).map((day) {
+                              return DropdownMenuItem<int>(
+                                value: day,
+                                child: Text('$day日'),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(() {
+                                  tempDay = value;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'キャンセル',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedBirthYear = tempYear;
+                      _selectedBirthMonth = tempMonth;
+                      _selectedBirthDay = tempDay;
+                    });
+                    Navigator.of(context).pop();
+                    print('生年月日が選択されました: ${tempYear}年${tempMonth}月${tempDay}日');
+                  },
+                  child: const Text(
+                    '確定',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // 居住地選択ピッカー
+  void _showLocationPicker(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.purple.shade800,
+        title: const Text(
+          '都道府県を選択',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: ListView.builder(
+            itemCount: _prefectures.length,
+            itemBuilder: (context, index) {
+              final prefecture = _prefectures[index];
+              return ListTile(
+                title: Text(
+                  prefecture,
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
+                trailing: _selectedLocation == prefecture
+                    ? const Icon(Icons.check, color: Colors.white)
+                    : null,
+                onTap: () {
+                  setState(() {
+                    _selectedLocation = prefecture;
+                  });
+                  Navigator.pop(context);
+                  print('居住地が選択されました: $prefecture');
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+}

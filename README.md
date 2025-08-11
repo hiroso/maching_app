@@ -97,7 +97,37 @@ Flutter製のモダンなマッチングアプリケーションです。Tinder�
    - `lib/firebase_options.dart`
 
 #### 機密情報の管理
+
+**⚠️ 重要**: 機密情報は絶対にGitにコミットしないでください！
+
+1. **Google Sign-In設定**:
+   ```bash
+   # iOS設定ファイルの作成
+   cp ios/Runner/Config/GoogleConfig.example.xcconfig ios/Runner/Config/GoogleConfig.xcconfig
+   # 各自のGoogle Client IDを設定
+   ```
+
+2. **Firebase設定ファイル**:
+   - `ios/Runner/GoogleService-Info.plist`
+   - `android/app/google-services.json`
+   - `lib/firebase_options.dart`
+
+3. **環境変数ファイル**:
+   ```bash
+   # .envファイルの作成
+   cp .env.example .env
+   # 各自のAPIキーを設定
+   ```
+
+#### セキュリティチェック
 ```bash
+# 機密ファイルが追跡されていないことを確認
+git status
+git ls-files | grep -E "(google-services|GoogleService|firebase|Info\.plist)"
+
+# 機密情報が含まれていないことを確認
+git grep -l "YOUR_API_KEY\|YOUR_CLIENT_ID"
+```
 # 設定テンプレートをコピー
 cp config/app_config.example.dart config/app_config.dart
 
