@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "357239775641",
-    "project_id": "matching-app-2025-bf3e3",
-    "storage_bucket": "matching-app-2025-bf3e3.firebasestorage.app"
+    "project_number": "YOUR_PROJECT_NUMBER",
+    "project_id": "YOUR_PROJECT_ID",
+    "storage_bucket": "YOUR_PROJECT_ID.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:357239775641:android:a4fc274d4b52ebf3567308",
+        "mobilesdk_app_id": "YOUR_ANDROID_APP_ID",
         "android_client_info": {
           "package_name": "com.app.matching.matching_app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBHFHY3_ohfZvzQLQRNjFZHWSixXpjk5W8"
+          "current_key": "YOUR_ANDROID_API_KEY"
         }
       ],
       "services": {
