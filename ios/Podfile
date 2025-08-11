@@ -1,5 +1,5 @@
 # Uncomment this line to define a global platform for your project
-platform :ios, '13.0'
+platform :ios, '15.0'
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 ENV['COCOAPODS_PARALLEL_CODE_SIGN'] = 'true'
@@ -21,9 +21,14 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 use_modular_headers!
+use_frameworks! :linkage => :static
 
 target 'Runner' do
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  # gRPCの依存関係を明示的に指定
+  pod 'gRPC-Core', :modular_headers => true
+  pod 'gRPC-C++', :modular_headers => true
 
   target 'RunnerTests' do
     inherit! :search_paths
@@ -31,8 +36,29 @@ target 'Runner' do
 end
 
 post_install do |installer|
+  # iOSデプロイメントターゲットの設定
+  installer.generated_projects.each do |project|
+    project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      end
+    end
+  end
+  
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    
+    # ビルド設定の調整
+    target.build_configurations.each do |config|
+      # iOSデプロイメントターゲットの設定
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      
+      # ヘッダー検索パスの調整
+      if config.build_settings['HEADER_SEARCH_PATHS']
+        config.build_settings['HEADER_SEARCH_PATHS'] ||= []
+        config.build_settings['HEADER_SEARCH_PATHS'] << '$(PODS_ROOT)/Headers/Private/grpc'
+      end
+    end
     
     # すべてのターゲットで-Gフラグ除去
     target.build_configurations.each do |config|
@@ -59,12 +85,37 @@ post_install do |installer|
     end
   end
   
-  # gRPC-Coreのモジュールマップパス修正
-  grpc_modulemap_src = 'Pods/Target Support Files/gRPC-Core/gRPC-Core.modulemap'
-  grpc_modulemap_dst = 'Pods/Headers/Private/grpc/gRPC-Core.modulemap'
+  # gRPC-Coreのモジュールマップパス修正（安全なコピー）
+  grpc_modulemap_src = File.join(installer.sandbox.root, 'Target Support Files/gRPC-Core/gRPC-Core.modulemap')
+  grpc_modulemap_dst = File.join(installer.sandbox.root, 'Headers/Private/grpc/gRPC-Core.modulemap')
   
-  if File.exist?(grpc_modulemap_src) && !File.exist?(grpc_modulemap_dst)
-    FileUtils.mkdir_p('Pods/Headers/Private/grpc')
-    FileUtils.cp(grpc_modulemap_src, grpc_modulemap_dst)
+  if File.exist?(grpc_modulemap_src)
+    FileUtils.mkdir_p(File.dirname(grpc_modulemap_dst))
+    # ファイルが存在しない場合のみコピー
+    unless File.exist?(grpc_modulemap_dst) && FileUtils.identical?(grpc_modulemap_src, grpc_modulemap_dst)
+      FileUtils.cp(grpc_modulemap_src, grpc_modulemap_dst)
+      puts "✅ gRPC-Core modulemap copied to #{grpc_modulemap_dst}"
+    else
+      puts "ℹ️  gRPC-Core modulemap already exists and identical at #{grpc_modulemap_dst}"
+    end
+  else
+    puts "⚠️  gRPC-Core modulemap source not found at #{grpc_modulemap_src}"
+  end
+  
+  # gRPC-C++のモジュールマップパス修正（安全なコピー）
+  grpcpp_modulemap_src = File.join(installer.sandbox.root, 'Target Support Files/gRPC-C++/gRPC-C++.modulemap')
+  grpcpp_modulemap_dst = File.join(installer.sandbox.root, 'Headers/Private/grpc/gRPC-C++.modulemap')
+  
+  if File.exist?(grpcpp_modulemap_src)
+    FileUtils.mkdir_p(File.dirname(grpcpp_modulemap_dst))
+    # ファイルが存在しない場合のみコピー
+    unless File.exist?(grpcpp_modulemap_dst) && FileUtils.identical?(grpcpp_modulemap_src, grpcpp_modulemap_dst)
+      FileUtils.cp(grpcpp_modulemap_src, grpcpp_modulemap_dst)
+      puts "✅ gRPC-C++ modulemap copied to #{grpcpp_modulemap_dst}"
+    else
+      puts "ℹ️  gRPC-C++ modulemap already exists and identical at #{grpcpp_modulemap_dst}"
+    end
+  else
+    puts "⚠️  gRPC-C++ modulemap source not found at #{grpcpp_modulemap_src}"
   end
 end

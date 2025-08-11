@@ -169,19 +169,19 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           FloatingActionButton(
             heroTag: 'pass',
-            onPressed: () => controller.swipe(),
+            onPressed: () => controller.swipe(CardSwiperDirection.left),
             backgroundColor: Colors.grey,
             child: const Icon(Icons.close, color: Colors.white),
           ),
           FloatingActionButton(
             heroTag: 'super_like',
-            onPressed: () => controller.swipe(),
+            onPressed: () => controller.swipe(CardSwiperDirection.top),
             backgroundColor: Colors.blue,
             child: const Icon(Icons.star, color: Colors.white),
           ),
           FloatingActionButton(
             heroTag: 'like',
-            onPressed: () => controller.swipe(),
+            onPressed: () => controller.swipe(CardSwiperDirection.right),
             backgroundColor: Colors.pink,
             child: const Icon(Icons.favorite, color: Colors.white),
           ),

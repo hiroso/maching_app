@@ -35,10 +35,10 @@ class MyApp extends ConsumerWidget {
       builder: (context, child) {
         return authState.when(
           data: (user) {
-            if (user == null) {
-              return const AuthScreen();
+            if (user != null) {
+              return child!;
             }
-            return child!;
+            return const AuthScreen();
           },
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),

@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:google_sign_in/google_sign_in.dart';  // Temporarily disabled
-// import 'package:sign_in_with_apple/sign_in_with_apple.dart';  // Temporarily disabled
+import '../providers/auth_provider.dart';
 
-class AuthScreen extends StatefulWidget {
+class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
 
   @override
-  State<AuthScreen> createState() => _AuthScreenState();
+  ConsumerState<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen> {
+class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _isLoading = false;
 
   @override
@@ -51,6 +51,16 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 60),
 
+                // Google Sign-In ボタン
+                _buildSignInButton(
+                  'Googleでサインイン',
+                  'assets/google_logo.png',
+                  Colors.white,
+                  Colors.black87,
+                  _signInWithGoogle,
+                ),
+                const SizedBox(height: 24),
+
                 // Apple Sign-In ボタン
                 _buildSignInButton(
                   'Appleでサインイン',
@@ -80,21 +90,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                 ),
 
-                // 一時的なダミーボタン
-                ElevatedButton(
-                  onPressed: () => _navigateToMain(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.pink,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    '開発モード: メイン画面へ',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
+
                 if (_isLoading)
                   const Padding(
                     padding: EdgeInsets.all(16.0),
@@ -145,6 +141,62 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        print('Googleサインインがキャンセルされました');
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser != null && auth.currentUser!.isAnonymous) {
+        await auth.currentUser!.linkWithCredential(credential);
+      } else {
+        await auth.signInWithCredential(credential);
+      }
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid);
+        await userDoc.set({
+          'uid': user.uid,
+          'email': user.email,
+          'displayName': user.displayName,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'provider': 'google',
+        }, SetOptions(merge: true));
+      }
+
+      print('Google認証成功: ${user?.email ?? 'email不明'}');
+      _navigateToMain();
+    } catch (e) {
+      print('Google認証エラー: $e');
+      if (mounted) {
+        _showErrorDialog('Googleサインインに失敗しました: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _signInWithApple() async {
     setState(() {
       _isLoading = true;
@@ -153,9 +205,11 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final available = await SignInWithApple.isAvailable();
       if (!available) {
-        _showErrorDialog(
-          'このデバイスではAppleサインインが利用できません。\n(iCloudに未サインイン、またはアプリに"Sign in with Apple"権限未付与の可能性)',
-        );
+        if (mounted) {
+          _showErrorDialog(
+            'このデバイスではAppleサインインが利用できません。\n(iCloudに未サインイン、またはアプリに"Sign in with Apple"権限未付与の可能性)',
+          );
+        }
         return;
       }
 
@@ -191,9 +245,14 @@ class _AuthScreenState extends State<AuthScreen> {
           'provider': 'apple',
         }, SetOptions(merge: true));
       }
+
+      print('Apple認証成功: ${user?.email ?? 'email不明'}');
       _navigateToMain();
     } catch (e) {
-      _showErrorDialog('Appleサインインに失敗しました: $e');
+      print('Apple認証エラー: $e');
+      if (mounted) {
+        _showErrorDialog('Appleサインインに失敗しました: $e');
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -239,9 +298,13 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       await FirebaseAuth.instance.signInAnonymously();
+      print('ゲストログイン成功');
       _navigateToMain();
     } catch (e) {
-      _showErrorDialog('ゲストログインに失敗しました: $e');
+      print('ゲストログインエラー: $e');
+      if (mounted) {
+        _showErrorDialog('ゲストログインに失敗しました: $e');
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -252,22 +315,30 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   void _navigateToMain() {
-    Navigator.of(context).pushReplacementNamed('/');
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed('/');
+    }
   }
 
   void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('エラー'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+    // Navigatorコンテキストの問題を回避
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('エラー'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }
