@@ -54,13 +54,13 @@
 			<string>google</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.357239775641-08iism51nt02qqdu5gm66gibbutr8miu</string>
+				        <string>com.googleusercontent.apps.YOUR_REVERSED_CLIENT_ID</string>
 			</array>
 		</dict>
 	</array>
 	
 	<!-- Google Sign-In 設定 -->
 	<key>GIDClientID</key>
-	<string>357239775641-08iism51nt02qqdu5gm66gibbutr8miu.apps.googleusercontent.com</string>
+	        <string>YOUR_CLIENT_ID</string>
 </dict>
 </plist>
